@@ -2,5 +2,5 @@
 
 ```shell
 cabal build
-cabal run yaml-parser -- example.yaml
+cabal run yaml-parser -- example.yaml json
 ```

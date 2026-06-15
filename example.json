@@ -1,0 +1,23 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 8080,
+    "debug": true,
+    "timeout": null
+  },
+  "database": {
+    "name": "mydb",
+    "pool_size": 5,
+    "ratio": 0.75,
+    "tags": ["primary", "read-replica"]
+  },
+  "features": {
+    "experimental": false,
+    "limits": {
+      "max_connections": 100,
+      "max_retries": 3
+    }
+  },
+  "empty_map": {},
+  "empty_list": []
+}
