@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <server>
+    <host>localhost</host>
+    <port>8080</port>
+    <debug>true</debug>
+    <timeout/>
+  </server>
+  <database>
+    <name>mydb</name>
+    <pool_size>5</pool_size>
+    <ratio>0.75</ratio>
+    <tags>
+      <item>primary</item>
+      <item>read-replica</item>
+    </tags>
+  </database>
+  <features>
+    <experimental>false</experimental>
+    <limits>
+      <max_connections>100</max_connections>
+      <max_retries>3</max_retries>
+    </limits>
+  </features>
+  <empty_map/>
+  <empty_list/>
+</config>

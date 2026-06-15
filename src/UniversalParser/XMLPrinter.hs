@@ -14,10 +14,6 @@ toXml v = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ++ renderValue 0 v
 indent :: Int -> String
 indent n = replicate (n * 2) ' '
 
-renderValue :: Int -> UniversalValue -> String
-renderValue lvl (VElement tag attrs children) = renderElement lvl tag attrs children
-renderValue lvl v                             = renderElement lvl "value" Map.empty [v]
-
 renderElement :: Int -> Text -> Map Text Text -> [UniversalValue] -> String
 renderElement lvl tag attrs children =
   indent lvl ++ "<" ++ T.unpack tag ++ renderAttrs attrs ++ close
@@ -36,16 +32,24 @@ renderAttrs m
   where
     renderAttr (k, v) = T.unpack k ++ "=\"" ++ escapeAttr (T.unpack v) ++ "\""
 
+renderValue :: Int -> UniversalValue -> String
+renderValue lvl (VElement tag attrs children) = renderElement lvl tag attrs children
+renderValue lvl (VObject m)                   = renderObjectChild lvl m
+renderValue lvl (VArray vs)                   = renderArrayChild lvl vs
+renderValue lvl v                             = renderScalarTag lvl v
+
+renderScalarTag :: Int -> UniversalValue -> String
+renderScalarTag lvl VNull       = indent lvl ++ "<null/>"
+renderScalarTag lvl (VBool b)   = indent lvl ++ "<bool>" ++ (if b then "true" else "false") ++ "</bool>"
+renderScalarTag lvl (VInt n)    = indent lvl ++ "<number>" ++ show n ++ "</number>"
+renderScalarTag lvl (VFloat d)  = indent lvl ++ "<number>" ++ show d ++ "</number>"
+renderScalarTag lvl (VString t) = indent lvl ++ escapeText (T.unpack t)
+renderScalarTag lvl (VArray vs)  = renderArrayChild lvl vs
+renderScalarTag lvl (VObject m)  = renderObjectChild lvl m
+renderScalarTag lvl (VElement tag attrs children) = renderElement lvl tag attrs children
+
 renderChild :: Int -> UniversalValue -> String
-renderChild lvl (VElement tag attrs children) = renderElement lvl tag attrs children
-renderChild lvl (VString t)                   = indent lvl ++ escapeText (T.unpack t)
-renderChild lvl VNull                         = indent lvl ++ "<null/>"
-renderChild lvl (VBool True)                  = indent lvl ++ "<bool>true</bool>"
-renderChild lvl (VBool False)                 = indent lvl ++ "<bool>false</bool>"
-renderChild lvl (VInt n)                      = indent lvl ++ "<number>" ++ show n ++ "</number>"
-renderChild lvl (VFloat d)                    = indent lvl ++ "<number>" ++ show d ++ "</number>"
-renderChild lvl (VArray vs)                   = renderArrayChild lvl vs
-renderChild lvl (VObject m)                   = renderObjectChild lvl m
+renderChild = renderScalarTag
 
 renderArrayChild :: Int -> [UniversalValue] -> String
 renderArrayChild lvl vs =
@@ -60,9 +64,15 @@ renderObjectChild lvl m =
   ++ indent lvl ++ "</object>"
   where
     renderPair (k, v) =
-      indent (lvl + 1) ++ "<" ++ T.unpack k ++ ">\n"
-      ++ renderChild (lvl + 2) v ++ "\n"
-      ++ indent (lvl + 1) ++ "</" ++ T.unpack k ++ ">\n"
+      (case v of
+        VString t ->
+          indent (lvl + 1) ++ "<" ++ T.unpack k ++ ">" ++ escapeText (T.unpack t) ++ "</" ++ T.unpack k ++ ">"
+        VNull ->
+          indent (lvl + 1) ++ "<" ++ T.unpack k ++ "/>"
+        _ ->
+          indent (lvl + 1) ++ "<" ++ T.unpack k ++ ">\n"
+          ++ renderChild (lvl + 2) v ++ "\n"
+          ++ indent (lvl + 1) ++ "</" ++ T.unpack k ++ ">") ++ "\n"
 
 escapeText :: String -> String
 escapeText [] = []
