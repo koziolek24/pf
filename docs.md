@@ -60,7 +60,7 @@ parseYAMLFile :: FilePath   -> IO (Either ParseError UniversalValue)
 ```
 
 ### XmlParser
-
+ 
 Pisany ręcznie — własny parser kombinatorowy (`Parser` jako `Functor` /
 `Applicative` / `Monad` nad `Either ParseError`), zgodny z gramatyką EBNF
 projektu. Obsługuje: deklarację `<?xml ... ?>`, komentarze `<!-- -->`,
@@ -69,10 +69,34 @@ elementy przeplatane), entity references (`&amp; &lt; &gt; &quot; &apos;`)
 i character references (`&#65;`, `&#x41;`). Walidacja zgodności tagów
 otwierającego/zamykającego. Czysto whitespace'owe text node'y między
 tagami są odfiltrowywane.
-
+ 
 ```haskell
 parseXML     :: ByteString -> Either ParseError UniversalValue
 parseXMLFile :: FilePath   -> IO (Either ParseError UniversalValue)
+```
+ 
+**Inferencja kształtu AST.** Sparsowany element nie jest automatycznie
+pakowany w `VElement` — parser dobiera najbardziej naturalny typ
+`UniversalValue` na podstawie dzieci i atrybutów (`shapeElement`),
+zachowując informację o tagu każdego dziecka aż do tego momentu (typ
+pomocniczy `Child`, niewidoczny w wyniku końcowym). Reguły, w kolejności
+priorytetu:
+ 
+1. brak dzieci, brak atrybutów → `VNull` (np. `<timeout/>`)
+2. brak dzieci, są atrybuty → `VElement tag attrs []` (atrybuty muszą mieć gdzie się znaleźć)
+3. jedno dziecko tekstowe, brak atrybutów → wartość inferowana
+   (`inferScalar`: null/bool/int/float/string) — np. `<port>8080</port>` → `VInt 8080`
+4. same dzieci-elementy, brak atrybutów:
+   - wszystkie ten sam tag → `VArray` (np. wiele `<item>` w `<tags>`)
+   - różne tagi → `VObject` kluczowany nazwą tagu (np. `<host>`/`<port>` w `<server>`)
+5. wszystko inne (mixed content, albo atrybuty obok złożonej zawartości) →
+   fallback do `VElement tag attrs children`
+Efekt: typowy "configowy" XML (jeden tag = jedna wartość, brak atrybutów)
+parsuje się do czystego `VObject`/`VArray`/skalarów, identycznie jak
+analogiczny JSON/YAML — `VElement` pojawia się tylko tam, gdzie XML
+faktycznie niesie coś, czego JSON/YAML nie umie wyrazić (atrybuty, mixed
+content).
+ 
 ```
 
 ## Printery
