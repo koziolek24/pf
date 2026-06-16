@@ -1,0 +1,106 @@
+{
+  "_attrs": {},
+  "_children": [
+    {
+      "_attrs": {},
+      "_children": [
+        {
+          "_attrs": {},
+          "_children": ["localhost"],
+          "_tag": "host"
+        },
+        {
+          "_attrs": {},
+          "_children": ["8080"],
+          "_tag": "port"
+        },
+        {
+          "_attrs": {},
+          "_children": ["true"],
+          "_tag": "debug"
+        },
+        {
+          "_attrs": {},
+          "_children": [],
+          "_tag": "timeout"
+        }
+      ],
+      "_tag": "server"
+    },
+    {
+      "_attrs": {},
+      "_children": [
+        {
+          "_attrs": {},
+          "_children": ["mydb"],
+          "_tag": "name"
+        },
+        {
+          "_attrs": {},
+          "_children": ["5"],
+          "_tag": "pool_size"
+        },
+        {
+          "_attrs": {},
+          "_children": ["0.75"],
+          "_tag": "ratio"
+        },
+        {
+          "_attrs": {},
+          "_children": [
+            {
+              "_attrs": {},
+              "_children": ["primary"],
+              "_tag": "item"
+            },
+            {
+              "_attrs": {},
+              "_children": ["read-replica"],
+              "_tag": "item"
+            }
+          ],
+          "_tag": "tags"
+        }
+      ],
+      "_tag": "database"
+    },
+    {
+      "_attrs": {},
+      "_children": [
+        {
+          "_attrs": {},
+          "_children": ["false"],
+          "_tag": "experimental"
+        },
+        {
+          "_attrs": {},
+          "_children": [
+            {
+              "_attrs": {},
+              "_children": ["100"],
+              "_tag": "max_connections"
+            },
+            {
+              "_attrs": {},
+              "_children": ["3"],
+              "_tag": "max_retries"
+            }
+          ],
+          "_tag": "limits"
+        }
+      ],
+      "_tag": "features"
+    },
+    {
+      "_attrs": {},
+      "_children": [],
+      "_tag": "empty_map"
+    },
+    {
+      "_attrs": {},
+      "_children": [],
+      "_tag": "empty_list"
+    }
+  ],
+  "_tag": "config"
+}

@@ -44,7 +44,7 @@ Content      ::= { Element | Text | Reference | Comment }
 Comment      ::= ""
 
 Reference    ::= EntityRef | CharRef
-EntityRef    ::= "&" Name ";"          (* Restricted to: amp, lt, gt, quot, apos *)
+EntityRef    ::= "&" Name ";"
 CharRef      ::= "&#" DecNum ";" | "&#x" HexNum ";"
 
 Name         ::= NameStart { NameChar }
@@ -59,4 +59,30 @@ CharMinusQuoteAmp  ::= r"[^\"&]"
 CharMinusAposAmp   ::= r"[^'&]"
 CharMinusDash      ::= r"[^-]"
 Text               ::= r"[^<&]+"
+```
+
+## YAML
+
+```
+YamlDocument ::= Value
+
+Value        ::= BlockNode | FlowNode
+
+BlockNode    ::= BlockMapping | BlockSequence | PlainScalar
+
+BlockMapping ::= INDENT KeyValuePair { KeyValuePair } DEDENT
+KeyValuePair ::= Key ":" ( Value | NEWLINE BlockNode ) NEWLINE
+
+BlockSequence ::= INDENT { "-" ( Value | NEWLINE BlockNode ) NEWLINE } DEDENT
+
+FlowNode     ::= FlowMapping | FlowSequence
+FlowMapping  ::= "{" [ FlowPair { "," FlowPair } ] "}"
+FlowSequence ::= "[" [ Value { "," Value } ] "]"
+FlowPair     ::= Key ":" Value
+```
+
+```regex
+(* Terminals *)
+Key          ::= PlainScalar
+PlainScalar  ::= ScalarChar { ScalarChar }
 ```

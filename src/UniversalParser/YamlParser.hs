@@ -83,7 +83,6 @@ isBoolF t = t `elem` ["false", "False", "FALSE"]
 
 tryInt :: Text -> Maybe Integer
 tryInt t =
-  -- Hex
   case T.stripPrefix "0x" t <> T.stripPrefix "0X" t of
     Just hex ->
       case TR.hexadecimal hex of
@@ -117,4 +116,4 @@ nodeToText (Y.Scalar _ (Y.SInt  i)) = T.pack (show i)
 nodeToText (Y.Scalar _ (Y.SFloat d))= T.pack (show d)
 nodeToText (Y.Scalar _ Y.SNull)     = "null"
 nodeToText (Y.Scalar _ (Y.SBool b)) = if b then "true" else "false"
-nodeToText other                    = T.pack (show other)  -- fallback
+nodeToText other                    = T.pack (show other)
