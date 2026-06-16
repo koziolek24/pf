@@ -1,0 +1,22 @@
+---
+
+database: 
+  name: mydb
+  pool_size: 5
+  ratio: 0.75
+  tags: 
+    - primary
+    - read-replica
+empty_list: []
+empty_map: {}
+features: 
+  experimental: false
+  limits: 
+    max_connections: 100
+    max_retries: 3
+server: 
+  debug: true
+  host: localhost
+  port: 8080
+  timeout: null
+
