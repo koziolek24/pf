@@ -126,15 +126,34 @@ breakOn sub s@(c:cs)
   | take (length sub) s == sub = Just ([], s)
   | otherwise                  = fmap (\(pre, post) -> (c:pre, post)) (breakOn sub cs)
 
+-- | A parsed child element together with its tag name. We need to keep the
+-- tag around even after a child has been shaped into a scalar/array/object,
+-- because the *parent* element needs the tag to decide whether its children
+-- should become a VArray (siblings share a tag), a VObject (siblings have
+-- distinct tags), or fall back to VElement (mixed content). If we discarded
+-- the tag as soon as a child was shaped, grouping-by-tag at the parent level
+-- would be impossible.
+--
+-- A non-element content item (text, or a comment which becomes VNull) has no
+-- tag, so we represent it as a Leaf instead of a Node.
+data Child = ChildElem Text (Map.Map Text Text) UniversalValue | ChildLeaf UniversalValue
+
 element :: Parser UniversalValue
-element = do
+element = childValue <$> elementChild
+
+childValue :: Child -> UniversalValue
+childValue (ChildElem _ _ v) = v
+childValue (ChildLeaf v)     = v
+
+elementChild :: Parser Child
+elementChild = do
   _       <- char '<'
   tag     <- name
   attrs   <- many (skipSpaces >> attribute)
   skipSpaces
   selfClose <- tryP (string "/>")
   case selfClose of
-    Just _  -> return $ VElement (T.pack tag) (Map.fromList attrs) []
+    Just _  -> return $ mkChild (T.pack tag) (Map.fromList attrs) []
     Nothing -> do
       _ <- char '>'
       children <- content
@@ -145,12 +164,99 @@ element = do
         else do
           skipSpaces
           _ <- char '>'
-          return $ VElement (T.pack tag) (Map.fromList attrs) (filterEmpty children)
+          return $ mkChild (T.pack tag) (Map.fromList attrs) (filterEmptyChildren children)
 
-filterEmpty :: [UniversalValue] -> [UniversalValue]
-filterEmpty = filter $ \v -> case v of
-  VString t -> not (T.null (T.strip t))
-  _         -> True
+mkChild :: Text -> Map.Map Text Text -> [Child] -> Child
+mkChild tag attrs children = ChildElem tag attrs (shapeElement tag attrs children)
+
+-- | Decide the most specific AST shape for an element given its (already
+-- parsed, whitespace-filtered) children, instead of always wrapping them in
+-- a generic VElement. This is purely a post-processing decision over the
+-- already-parsed children; it does not change how XML is tokenized or
+-- parsed, and it never touches AST.hs.
+--
+-- Rules, in priority order:
+--   1. No children, no attrs  -> VNull               (e.g. <timeout/>)
+--   2. No children, has attrs -> VElement tag attrs []  (attrs need a home)
+--   3. Single text child, no attrs -> inferred scalar (e.g. <port>8080</port>)
+--   4. All children are elements, no attrs:
+--        a. all children share the same tag -> VArray of their (shaped) values
+--           (e.g. <tags><item/><item/></tags>)
+--        b. children have distinct tags      -> VObject keyed by tag
+--           (e.g. <server><host/><port/></server>)
+--   5. Anything else (mixed text+elements, or attrs present alongside
+--      element/array/object-shaped content) -> fall back to VElement,
+--      since attrs or mixed content can't be represented by VObject/VArray.
+--
+-- Crucially, `children` here are Child values, which still carry their tag
+-- names even if a child element has already been shaped into a scalar,
+-- array, or object. That's what makes tag-based grouping possible here.
+shapeElement :: Text -> Map.Map Text Text -> [Child] -> UniversalValue
+shapeElement tag attrs children
+  | null children && Map.null attrs
+  = VNull
+
+  | null children
+  = VElement tag attrs []
+
+  | [ChildLeaf (VString t)] <- children, Map.null attrs
+  = inferScalar t
+
+  | Map.null attrs, Just tagged <- allTagged children
+  = if sameTag (map fst tagged)
+      then VArray (map snd tagged)
+      else VObject (Map.fromList tagged)
+
+  | otherwise
+  = VElement tag attrs (map childValue children)
+
+-- | Pair each child with its tag so the parent can decide list-vs-object
+-- grouping by tag name. Returns Nothing if any child is a non-element leaf
+-- (e.g. stray text mixed with elements), which forces the VElement fallback
+-- above, since plain text has no tag to group by.
+allTagged :: [Child] -> Maybe [(Text, UniversalValue)]
+allTagged = mapM asTagged
+  where
+    asTagged (ChildElem t _ v) = Just (t, v)
+    asTagged (ChildLeaf _)     = Nothing
+
+sameTag :: [Text] -> Bool
+sameTag []     = True
+sameTag (t:ts) = all (== t) ts
+
+-- | Infer a more specific scalar type (bool/int/float/null) from a leaf
+-- text node instead of leaving everything as a raw string.
+inferScalar :: Text -> UniversalValue
+inferScalar t
+  | T.null s      = VNull
+  | s == "true"   = VBool True
+  | s == "false"  = VBool False
+  | isIntText s   = VInt (read (T.unpack s) :: Integer)
+  | isFloatText s = VFloat (read (T.unpack s) :: Double)
+  | otherwise     = VString t
+  where
+    s = T.strip t
+
+isIntText :: Text -> Bool
+isIntText s = case T.unpack s of
+  ('-':ds@(_:_)) -> all isDigitC ds
+  ds@(_:_)       -> all isDigitC ds
+  _              -> False
+  where isDigitC c = c >= '0' && c <= '9'
+
+isFloatText :: Text -> Bool
+isFloatText s =
+  case T.splitOn "." s of
+    [intPart, fracPart] ->
+      not (T.null fracPart) && all isDigitC (T.unpack fracPart)
+      && (T.null intPart || isIntText intPart || intPart == "-")
+    _ -> False
+  where isDigitC c = c >= '0' && c <= '9'
+
+filterEmptyChildren :: [Child] -> [Child]
+filterEmptyChildren = filter $ \c -> case c of
+  ChildLeaf (VString t) -> not (T.null (T.strip t))
+  _                     -> True
 
 tryP :: Parser a -> Parser (Maybe a)
 tryP p = Parser $ \inp ->
@@ -188,14 +294,14 @@ Parser p1 <|> Parser p2 = Parser $ \inp ->
     Right r -> Right r
     Left _  -> p2 inp
 
-content :: Parser [UniversalValue]
+content :: Parser [Child]
 content = many contentItem
 
-contentItem :: Parser UniversalValue
+contentItem :: Parser Child
 contentItem =
-      fmap (VString . T.pack . concat) (many1 textChunk)
-  <|> element
-  <|> (comment >> return VNull)
+      fmap (ChildLeaf . VString . T.pack . concat) (many1 textChunk)
+  <|> elementChild
+  <|> (comment >> return (ChildLeaf VNull))
 
 textChunk :: Parser String
 textChunk =
