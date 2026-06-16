@@ -126,16 +126,6 @@ breakOn sub s@(c:cs)
   | take (length sub) s == sub = Just ([], s)
   | otherwise                  = fmap (\(pre, post) -> (c:pre, post)) (breakOn sub cs)
 
--- | A parsed child element together with its tag name. We need to keep the
--- tag around even after a child has been shaped into a scalar/array/object,
--- because the *parent* element needs the tag to decide whether its children
--- should become a VArray (siblings share a tag), a VObject (siblings have
--- distinct tags), or fall back to VElement (mixed content). If we discarded
--- the tag as soon as a child was shaped, grouping-by-tag at the parent level
--- would be impossible.
---
--- A non-element content item (text, or a comment which becomes VNull) has no
--- tag, so we represent it as a Leaf instead of a Node.
 data Child = ChildElem Text (Map.Map Text Text) UniversalValue | ChildLeaf UniversalValue
 
 element :: Parser UniversalValue
@@ -169,28 +159,6 @@ elementChild = do
 mkChild :: Text -> Map.Map Text Text -> [Child] -> Child
 mkChild tag attrs children = ChildElem tag attrs (shapeElement tag attrs children)
 
--- | Decide the most specific AST shape for an element given its (already
--- parsed, whitespace-filtered) children, instead of always wrapping them in
--- a generic VElement. This is purely a post-processing decision over the
--- already-parsed children; it does not change how XML is tokenized or
--- parsed, and it never touches AST.hs.
---
--- Rules, in priority order:
---   1. No children, no attrs  -> VNull               (e.g. <timeout/>)
---   2. No children, has attrs -> VElement tag attrs []  (attrs need a home)
---   3. Single text child, no attrs -> inferred scalar (e.g. <port>8080</port>)
---   4. All children are elements, no attrs:
---        a. all children share the same tag -> VArray of their (shaped) values
---           (e.g. <tags><item/><item/></tags>)
---        b. children have distinct tags      -> VObject keyed by tag
---           (e.g. <server><host/><port/></server>)
---   5. Anything else (mixed text+elements, or attrs present alongside
---      element/array/object-shaped content) -> fall back to VElement,
---      since attrs or mixed content can't be represented by VObject/VArray.
---
--- Crucially, `children` here are Child values, which still carry their tag
--- names even if a child element has already been shaped into a scalar,
--- array, or object. That's what makes tag-based grouping possible here.
 shapeElement :: Text -> Map.Map Text Text -> [Child] -> UniversalValue
 shapeElement tag attrs children
   | null children && Map.null attrs
@@ -210,10 +178,6 @@ shapeElement tag attrs children
   | otherwise
   = VElement tag attrs (map childValue children)
 
--- | Pair each child with its tag so the parent can decide list-vs-object
--- grouping by tag name. Returns Nothing if any child is a non-element leaf
--- (e.g. stray text mixed with elements), which forces the VElement fallback
--- above, since plain text has no tag to group by.
 allTagged :: [Child] -> Maybe [(Text, UniversalValue)]
 allTagged = mapM asTagged
   where
@@ -224,9 +188,6 @@ sameTag :: [Text] -> Bool
 sameTag []     = True
 sameTag (t:ts) = all (== t) ts
 
--- | Infer a more specific scalar type (bool/int/float/null) from a leaf
--- text node instead of leaving everything as a raw string.
-inferScalar :: Text -> UniversalValue
 inferScalar t
   | T.null s      = VNull
   | s == "true"   = VBool True
